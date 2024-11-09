@@ -1,9 +1,9 @@
 
 """
-一个RNN Transducer的示例，类似一个语言翻译任务，输入为一段文本序列X，输出为另一个文本序列Y；
-将Y序列中的特殊字符和元音字符去除即为X。例如：
-X：Wll, Prnc, s Gn nd Lcc r nw jst fmly stts f t
-Y：Well, Prince, so Genoa and Lucca are now just family estates of the
+一个RNN Transducer的示例，实现一个类似语言翻译的序列到序列任务；
+输入为一段文本序列X，输出为另一个文本序列Y；
+将Y序列中的元音字符去除即为X。例如：
+ X: Hll, Wrld --> Y：Hello, World
 """
 
 import torch
@@ -134,32 +134,6 @@ class Transducer(torch.nn.Module):
         loss = -self.comput_forward_prob(joiner_out, T, U, y).mean()
         return loss
 
-    def compute_single_alignment_prob(self, encoder_out, predictor_out, T, U, z, y):
-        """
-        Computes the probability of one alignment, z.
-        """ 
-        t = 0; u = 0
-        t_u_indices = []
-        y_expanded = []
-        for step in z:
-            t_u_indices.append((t,u))
-            if step == 0: 
-                y_expanded.append(NULL_INDEX)
-                t +=1
-            if step == 1:
-                y_expanded.append(y[u])
-                u +=1
-        t_u_indices.append((T-1,U))
-        y_expanded.append(NULL_INDEX)
-
-        t_indices = [t for (t,u) in t_u_indices]
-        u_indices = [u for (t,u) in t_u_indices]
-        encoder_out_expanded = encoder_out[t_indices]
-        predictor_out_expanded = predictor_out[u_indices]
-        joiner_out = self.joiner.forward(encoder_out_expanded, predictor_out_expanded).log_softmax(1)
-        logprob = -torch.nn.functional.nll_loss(input=joiner_out, target=torch.tensor(y_expanded).long().to(self.device), reduction="sum")
-        return logprob
-    
 #    Transducer.comput_single_alignment_prob = comput_single_alignment_prob
     def greedy_search(self, x, T):
         y_batch = []
@@ -249,7 +223,7 @@ class Trainer:
     self.lr = lr
     self.optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
   
-  def train(self, dataset, print_interval = 20):
+  def train(self, dataset, print_interval = 2):
     train_loss = 0
     num_samples = 0
     self.model.train()
@@ -301,20 +275,16 @@ class Trainer:
     test_loss /= num_samples
     return test_loss
     
-
 if __name__ == '__main__':
-
-
     with open("war_and_peace.txt", "r") as f:
         lines = f.readlines()
 
     end = round(0.9 * len(lines))
     train_lines = lines[:end]
     test_lines = lines[end:]
-    train_set = TextDataset(train_lines, batch_size=8)
-    test_set = TextDataset(test_lines, batch_size=8)
+    train_set = TextDataset(train_lines, batch_size=2)
+    test_set = TextDataset(test_lines, batch_size=2)
     train_set.__getitem__(0)
-    
 
     num_chars = len(string.printable)
     model = Transducer(num_inputs=num_chars+1, num_outputs=num_chars+1)
@@ -329,16 +299,4 @@ if __name__ == '__main__':
         test_loss = trainer.test(test_set)
         train_losses.append(train_loss)
         test_losses.append(test_loss)
-        print("Epoch %d: train loss = %f, test loss = %f" %(epoch, train_loss, test_loss))
-
-
-
-
-
-
-
-
-        
-
-
-        
+        print("Epoch %d: train loss = %f, test loss = %f" %(epoch, train_loss, test_loss)) 
